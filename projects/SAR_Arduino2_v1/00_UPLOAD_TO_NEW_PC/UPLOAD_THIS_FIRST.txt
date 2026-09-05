@@ -1,0 +1,21 @@
+﻿UPLOAD THIS FOLDER TO GOOGLE DRIVE:
+
+  00_UPLOAD_TO_NEW_PC\pc-vision
+
+What this contains:
+- Clean PC vision pack for another PC
+- No .venv
+- No __pycache__
+- No runtime temp files
+- Includes setup guide and model file
+
+Fast start on the new PC:
+1. Install Python 3.11+
+2. Open PowerShell in the pc-vision folder
+3. Run:
+
+   .\run_vision_ui.ps1
+
+If PowerShell blocks scripts:
+
+   powershell -ExecutionPolicy Bypass -File .\run_vision_ui.ps1

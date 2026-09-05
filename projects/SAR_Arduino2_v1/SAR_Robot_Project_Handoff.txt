@@ -1,0 +1,2340 @@
+SAR DISASTER RESPONSE ROBOT PROJECT HANDOFF
+Generated: 2026-03-29 19:55:22
+Workspace: C:\Users\Windows\Downloads\SAR_Arduino2_v1
+
+PROJECT OVERVIEW
+================
+Project name: SAR Disaster Response Robot
+Master controller board: Arduino Uno R3 (Arduino 2 / Master Brain)
+Robot control app: Native Android app with classic Bluetooth and BLE support
+Current firmware file: C:\Users\Windows\Downloads\SAR_Arduino2_v1\SAR_Arduino2_v1.ino
+Current Android app root: C:\Users\Windows\Downloads\SAR_Arduino2_v1\android-app
+Latest built APK: C:\Users\Windows\Downloads\SAR_Arduino2_v1\android-app\app\build\outputs\apk\debug\app-debug.apk
+Latest APK size: 5787510 bytes
+Latest APK build time: 03/29/2026 19:27:57
+
+HIGH-LEVEL ARCHITECTURE
+=======================
+1. Arduino 2 is the master brain.
+2. It reads sensors, handles safety logic, and forwards drive commands to Arduino 1 over I2C.
+3. The Android app connects over Bluetooth and shows telemetry plus controls.
+4. The app supports both classic Bluetooth and BLE devices.
+5. Direction controls in the app are press-and-hold: move on press, stop on release.
+
+CURRENT MASTER PIN MAP
+======================
+D2  = HC-05 BT RX
+D3  = HC-05 BT TX
+D4  = Digital flame sensor 1
+D5  = DHT11
+D6  = Digital flame sensor 2
+D7  = PIR 1
+D8  = PIR 2
+D9  = Rear ultrasonic TRIG
+D10 = Rear ultrasonic ECHO
+D11 = Front ultrasonic ECHO
+D12 = Front ultrasonic TRIG
+A0  = Flame analog 1
+A1  = Flame analog 2
+A2  = Flame analog 3
+A3  = MQ2 gas sensor
+A4  = I2C SDA
+A5  = I2C SCL
+
+IMPORTANT CURRENT SOURCE NOTES
+==============================
+1. The source reserves D4 and D6 for digital flame sensors.
+2. In the current firmware file, ENABLE_FLAME_SENSORS is set to 0.
+3. That means flame sensing is currently disabled in software even though the pins are assigned.
+4. Rear ultrasonic support is enabled in the source.
+5. Boot I2C scan is disabled by default to avoid startup hangs.
+6. USB-to-Bluetooth debug fallback logic is present.
+
+MASTER FIRMWARE FEATURES
+========================
+1. Front and rear ultrasonic reading.
+2. PIR motion detection.
+3. DHT temperature and humidity with safe polling interval.
+4. MQ2 gas reading with EEPROM-backed calibration baseline.
+5. Flame sensor support for analog and digital channels.
+6. Autonomous patrol and obstacle avoidance state machine.
+7. Hazard override for flame, gas, and high temperature.
+8. USB serial and Bluetooth command handling.
+9. Telemetry output for app parsing.
+10. I2C forwarding to Arduino 1 motor controller.
+
+COMMAND SET
+============
+Movement: F B L R S
+Speed: 1 2 3
+Servo: < > C
+Modes: A = autonomous, E = hazard
+Debug: ? V P I T Z K ~
+
+FIRMWARE IMPROVEMENTS ADDED
+===========================
+1. Reduced Uno RAM risk by removing heavy String command buffering.
+2. Added front and rear ultrasonic support.
+3. Moved digital flame pins to D4 and D6.
+4. Removed LED placeholder code.
+5. Added USB-to-Bluetooth debug fallback.
+6. Disabled boot-time I2C scan by default.
+7. Added EEPROM MQ2 baseline storage.
+8. Reworked autonomous scan into a non-blocking millis-based sequence.
+9. Added safer reverse behavior using rear ultrasonic.
+
+ANDROID APP OVERVIEW
+====================
+App name: SAR Robot Controller
+Platform: Android
+Supports classic Bluetooth: yes
+Supports BLE: yes
+Hold-to-drive controls: yes
+Raw console log: yes
+Telemetry parser: yes
+
+ANDROID APP IMPORTANT FILES
+===========================
+- Master Brain Firmware (.ino): C:\Users\Windows\Downloads\SAR_Arduino2_v1\SAR_Arduino2_v1.ino
+- Android Main Activity: C:\Users\Windows\Downloads\SAR_Arduino2_v1\android-app\app\src\main\java\com\sarrobot\controller\MainActivity.java
+- Android Bluetooth Controller: C:\Users\Windows\Downloads\SAR_Arduino2_v1\android-app\app\src\main\java\com\sarrobot\controller\BluetoothController.java
+- Android Telemetry Parser: C:\Users\Windows\Downloads\SAR_Arduino2_v1\android-app\app\src\main\java\com\sarrobot\controller\TelemetryParser.java
+- Android Device Item: C:\Users\Windows\Downloads\SAR_Arduino2_v1\android-app\app\src\main\java\com\sarrobot\controller\DeviceItem.java
+- Android Robot Telemetry Model: C:\Users\Windows\Downloads\SAR_Arduino2_v1\android-app\app\src\main\java\com\sarrobot\controller\RobotTelemetry.java
+- Android Manifest: C:\Users\Windows\Downloads\SAR_Arduino2_v1\android-app\app\src\main\AndroidManifest.xml
+- Android App README: C:\Users\Windows\Downloads\SAR_Arduino2_v1\android-app\README.md
+
+ANDROID PERMISSIONS
+===================
+- BLUETOOTH
+- BLUETOOTH_ADMIN
+- ACCESS_FINE_LOCATION (older Android BLE scanning)
+- BLUETOOTH_CONNECT
+- BLUETOOTH_SCAN
+
+ANDROID APP FEATURES ADDED
+==========================
+1. Native Android project scaffolded in android-app.
+2. Classic Bluetooth SPP support for HC-05 style modules.
+3. BLE scanning and connection support.
+4. Device picker showing classic and BLE transport types.
+5. Dashboard for distances, temp, humidity, gas, flame, PIR, alerts.
+6. Control buttons for movement, speed, servo, auto, hazard, status, snapshot, telemetry, I2C scan, and MQ2 calibration.
+7. Press-and-hold drive controls.
+8. APK built successfully.
+
+BUILD NOTES
+============
+Gradle wrapper updated to 8.9.
+Android plugin updated to 8.7.3.
+gradle.properties points to Android Studio JBR.
+Debug APK build succeeded.
+
+SUGGESTED NEXT STEPS
+====================
+1. Decide whether final wireless module will be classic Bluetooth or BLE.
+2. If flame sensing is needed now, set ENABLE_FLAME_SENSORS to 1 and retest.
+3. Add a bench-test mode that bypasses motor I2C when Arduino 1 is absent.
+4. Add ACK or heartbeat communication between Arduino 2 and Arduino 1.
+5. Keep the app and firmware telemetry format in sync.
+
+CODE APPENDIX
+=============
+
+FILE: Master Brain Firmware (.ino)
+PATH: C:\Users\Windows\Downloads\SAR_Arduino2_v1\SAR_Arduino2_v1.ino
+------------------------------------------------------------------------
+/**
+ * ============================================================
+ *  SAR DISASTER RESPONSE ROBOT - ARDUINO 2 (MASTER BRAIN)
+ *  Version: 1.1 UNO-R3 STABLE
+ * ============================================================
+ *  Role    : I2C Master - Bluetooth control + sensors +
+ *            autonomous decision making
+ *
+ *  ARDUINO UNO R3 NOTES:
+ *    - Avoid heavy String usage to reduce RAM fragmentation.
+ *    - DHT11 should not be polled too fast.
+ *    - A4/A5 are reserved for I2C (SDA/SCL).
+ *
+ *  PIN MAP:
+ *    HC-05 BT RX  : D2  (SoftwareSerial RX)
+ *    HC-05 BT TX  : D3  (SoftwareSerial TX)
+ *    Flame D1     : D4
+ *    DHT11        : D5
+ *    Flame D2     : D6
+ *    PIR 1        : D7
+ *    PIR 2        : D8
+ *    Rear US TRIG : D9
+ *    Rear US ECHO : D10
+ *    Front US ECHO: D11
+ *    Front US TRIG: D12
+ *    Flame A1     : A0 
+ *    Flame A2     : A1
+ *    Flame A3     : A2
+ *    MQ2          : A3
+ *    I2C SDA      : A4
+ *    I2C SCL      : A5
+ *
+ *  COMMAND SET:
+ *    F/B/L/R/S    Movement
+ *    1/2/3        Speed
+ *    </>/C        Servo left/right/center
+ *    A            Toggle autonomous
+ *    E            Toggle hazard
+ *    ?            Full status
+ *    V            One telemetry line
+ *    P            Toggle live telemetry
+ *    I            Scan I2C bus
+ *    T            Test sensors
+ *    Z            Toggle auto safety
+ *    K            Calibrate MQ2 baseline
+ *    ~            Reset baseline/default state
+ * ============================================================
+ */
+
+#include <SoftwareSerial.h>
+#include <DHT.h>
+#include <Wire.h>
+#include <EEPROM.h>
+
+// ============================================================
+//  TUNING ZONE
+// ============================================================
+
+#define DIST_STOP             15
+#define DIST_WARN             30
+#define DIST_CLEAR            40
+
+#define GAS_THRESHOLD         400
+#define GAS_DANGER            600
+
+#define ENABLE_FLAME_SENSORS  0
+#define ENABLE_REAR_US        1
+#define ENABLE_BT_DEBUG       0
+#define ENABLE_BOOT_I2C_SCAN  0
+#define FLAME_THRESHOLD       500
+
+#define TEMP_WARN             38
+#define TEMP_DANGER           50
+
+#define AUTO_BACKUP_MS        600
+#define AUTO_TURN_MS          700
+#define AUTO_SCAN_PAUSE       220
+#define AUTO_SCAN_RIGHT_PAUSE 300
+#define AUTO_CENTER_PAUSE     120
+#define AUTO_PATROL_SPEED     2
+#define AUTO_MOTION_PAUSE_MS  1200
+
+#define TELEM_INTERVAL_MS     500
+#define SENSOR_INTERVAL_MS    200
+#define DHT_INTERVAL_MS       2000
+#define COMMAND_GAP_MS        60
+#define USB_FALLBACK_TO_BT_MS 5000
+#define US_TIMEOUT_US         18000UL
+#define US_SAMPLES            2
+
+#define MQ2_WARMUP_MS         3000
+#define MQ2_EEPROM_MAGIC      0x4D51
+#define MQ2_EEPROM_ADDR       0
+
+// ============================================================
+//  PIN DEFINITIONS
+// ============================================================
+
+#define PIN_BT_RX             2
+#define PIN_BT_TX             3
+#define PIN_FLAME_D1          4
+#define PIN_DHT               5
+#define PIN_FLAME_D2          6
+#define PIN_PIR1              7
+#define PIN_PIR2              8
+#define PIN_US_REAR_TRIG      9
+#define PIN_US_REAR_ECHO      10
+#define PIN_US_FRONT_ECHO     11
+#define PIN_US_FRONT_TRIG     12
+#define PIN_FLAME_A1          A0
+#define PIN_FLAME_A2          A1
+#define PIN_FLAME_A3          A2
+#define PIN_MQ2               A3
+#define I2C_ADDR              8
+
+// ============================================================
+//  OBJECTS
+// ============================================================
+
+SoftwareSerial BT(PIN_BT_RX, PIN_BT_TX);
+DHT dht(PIN_DHT, DHT11);
+
+// ============================================================
+//  DEBUG HELPERS
+// ============================================================
+
+void sendCmd(char cmd);
+void sendCmdSilent(char cmd);
+void updateConsoleRouting();
+bool useBtDebug();
+extern bool btConsoleFallback;
+
+struct MQ2CalibrationData {
+  uint16_t magic;
+  int baseline;
+};
+
+bool useBtDebug() {
+  return ENABLE_BT_DEBUG || btConsoleFallback;
+}
+
+void DBG(const __FlashStringHelper *s) {
+  Serial.print(s);
+  if (useBtDebug()) {
+    BT.print(s);
+  }
+}
+void DBGLN(const __FlashStringHelper *s) {
+  Serial.println(s);
+  if (useBtDebug()) {
+    BT.println(s);
+  }
+}
+void DBG(const char *s) {
+  Serial.print(s);
+  if (useBtDebug()) {
+    BT.print(s);
+  }
+}
+void DBGLN(const char *s) {
+  Serial.println(s);
+  if (useBtDebug()) {
+    BT.println(s);
+  }
+}
+void DBG(char c) {
+  Serial.print(c);
+  if (useBtDebug()) {
+    BT.print(c);
+  }
+}
+void DBGLN(char c) {
+  Serial.println(c);
+  if (useBtDebug()) {
+    BT.println(c);
+  }
+}
+void DBG(int v) {
+  Serial.print(v);
+  if (useBtDebug()) {
+    BT.print(v);
+  }
+}
+void DBGLN(int v) {
+  Serial.println(v);
+  if (useBtDebug()) {
+    BT.println(v);
+  }
+}
+void DBG(unsigned long v) {
+  Serial.print(v);
+  if (useBtDebug()) {
+    BT.print(v);
+  }
+}
+void DBGLN(unsigned long v) {
+  Serial.println(v);
+  if (useBtDebug()) {
+    BT.println(v);
+  }
+}
+void DBG(float v) {
+  Serial.print(v);
+  if (useBtDebug()) {
+    BT.print(v);
+  }
+}
+void DBGLN(float v) {
+  Serial.println(v);
+  if (useBtDebug()) {
+    BT.println(v);
+  }
+}
+void DBGNL() {
+  Serial.println();
+  if (useBtDebug()) {
+    BT.println();
+  }
+}
+
+void printHexByte(byte value) {
+  if (value < 16) {
+    DBG('0');
+  }
+  Serial.print(value, HEX);
+  if (useBtDebug()) {
+    BT.print(value, HEX);
+  }
+}
+
+// ============================================================
+//  SYSTEM STATE
+// ============================================================
+
+float sTemp = 0.0f;
+float sHumid = 0.0f;
+float sFrontDist = 999.0f;
+float sRearDist = 999.0f;
+int sPIR1 = LOW;
+int sPIR2 = LOW;
+int sFlameA1 = 1023;
+int sFlameA2 = 1023;
+int sFlameA3 = 1023;
+int sFlameD1 = HIGH;
+int sFlameD2 = HIGH;
+int sGas = 0;
+int mq2Baseline = 0;
+
+bool alertFlame = false;
+bool alertGas = false;
+bool alertObstacleFront = false;
+bool alertObstacleRear = false;
+bool alertMotion = false;
+bool alertTemp = false;
+
+bool autonomous = false;
+bool hazardActive = false;
+bool autoSafety = true;
+bool telemActive = false;
+
+enum AutoState {
+  AUTO_PATROL,
+  AUTO_OBSTACLE_FOUND,
+  AUTO_BACKING,
+  AUTO_SCANNING,
+  AUTO_TURNING,
+  AUTO_HAZARD
+};
+
+AutoState autoState = AUTO_PATROL;
+
+enum ScanPhase {
+  SCAN_IDLE,
+  SCAN_WAIT_LEFT,
+  SCAN_WAIT_RIGHT,
+  SCAN_WAIT_CENTER
+};
+
+ScanPhase scanPhase = SCAN_IDLE;
+
+bool lastTurnLeft = true;
+char lastCmd = 'S';
+char pendingTurnCmd = 'S';
+const char *currentMode = "IDLE";
+float scanLeftDist = 999.0f;
+float scanRightDist = 999.0f;
+
+unsigned long lastSensorTime = 0;
+unsigned long lastTelemTime = 0;
+unsigned long lastDhtTime = 0;
+unsigned long autoTimer = 0;
+unsigned long motionPauseUntil = 0;
+unsigned long bootTime = 0;
+
+bool usbConsoleSeen = false;
+bool btConsoleFallback = false;
+bool btFallbackAnnounced = false;
+
+// ============================================================
+//  SMALL HELPERS
+// ============================================================
+
+int gasDelta() {
+  int delta = sGas - mq2Baseline;
+  return (delta > 0) ? delta : 0;
+}
+
+bool flameDetectedNow() {
+#if ENABLE_FLAME_SENSORS
+  return (sFlameA1 < FLAME_THRESHOLD) ||
+         (sFlameA2 < FLAME_THRESHOLD) ||
+         (sFlameA3 < FLAME_THRESHOLD) ||
+         (sFlameD1 == LOW) ||
+         (sFlameD2 == LOW);
+#else
+  return false;
+#endif
+}
+
+void setMode(const char *modeName) {
+  currentMode = modeName;
+}
+
+void saveMQ2Baseline() {
+  MQ2CalibrationData data;
+  data.magic = MQ2_EEPROM_MAGIC;
+  data.baseline = mq2Baseline;
+  EEPROM.put(MQ2_EEPROM_ADDR, data);
+}
+
+bool loadMQ2Baseline() {
+  MQ2CalibrationData data;
+  EEPROM.get(MQ2_EEPROM_ADDR, data);
+  if (data.magic != MQ2_EEPROM_MAGIC) {
+    return false;
+  }
+  if (data.baseline < 0 || data.baseline > 1023) {
+    return false;
+  }
+  mq2Baseline = data.baseline;
+  return true;
+}
+
+void clearMQ2BaselineStorage() {
+  MQ2CalibrationData data;
+  data.magic = 0;
+  data.baseline = 0;
+  EEPROM.put(MQ2_EEPROM_ADDR, data);
+}
+
+void enterHazard(const __FlashStringHelper *reason) {
+  if (!hazardActive) {
+    sendCmd('S');
+    sendCmd('H');
+  }
+  hazardActive = true;
+  autoState = AUTO_HAZARD;
+  scanPhase = SCAN_IDLE;
+  setMode("HAZARD");
+  DBG(F("HAZARD: "));
+  DBGLN(reason);
+}
+
+void clearHazardState() {
+  hazardActive = false;
+  scanPhase = SCAN_IDLE;
+  sendCmd('G');
+  if (autonomous) {
+    autoState = AUTO_PATROL;
+    setMode("AUTO");
+  } else {
+    setMode("IDLE");
+  }
+}
+
+// ============================================================
+//  I2C SEND TO ARDUINO 1
+// ============================================================
+
+void sendCmd(char cmd) {
+  Wire.beginTransmission(I2C_ADDR);
+  Wire.write(cmd);
+  byte err = Wire.endTransmission();
+  if (err != 0) {
+    DBG(F("[I2C] FAIL sending '"));
+    DBG(cmd);
+    DBG(F("' err="));
+    DBGLN((int)err);
+  }
+}
+
+void sendCmdSilent(char cmd) {
+  Wire.beginTransmission(I2C_ADDR);
+  Wire.write(cmd);
+  Wire.endTransmission();
+}
+
+// ============================================================
+//  SENSOR READS
+// ============================================================
+
+float readUltrasonicRaw(byte trigPin, byte echoPin) {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  unsigned long dur = pulseIn(echoPin, HIGH, US_TIMEOUT_US);
+  if (dur == 0) {
+    return 999.0f;
+  }
+  return dur * 0.0343f * 0.5f;
+}
+
+float readUltrasonicSensor(byte trigPin, byte echoPin) {
+  float best = 999.0f;
+  for (byte i = 0; i < US_SAMPLES; i++) {
+    float sample = readUltrasonicRaw(trigPin, echoPin);
+    if (sample < best) {
+      best = sample;
+    }
+    delay(5);
+  }
+  return best;
+}
+
+float readFrontUltrasonic() {
+  sFrontDist = readUltrasonicSensor(PIN_US_FRONT_TRIG, PIN_US_FRONT_ECHO);
+  return sFrontDist;
+}
+
+float readRearUltrasonic() {
+#if ENABLE_REAR_US
+  sRearDist = readUltrasonicSensor(PIN_US_REAR_TRIG, PIN_US_REAR_ECHO);
+#else
+  sRearDist = 999.0f;
+#endif
+  return sRearDist;
+}
+
+void readDHT() {
+  unsigned long now = millis();
+  if (now - lastDhtTime < DHT_INTERVAL_MS) {
+    return;
+  }
+
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+  if (!isnan(h)) {
+    sHumid = h;
+  }
+  if (!isnan(t)) {
+    sTemp = t;
+  }
+  lastDhtTime = now;
+}
+
+void readPIR() {
+  sPIR1 = digitalRead(PIN_PIR1);
+  sPIR2 = digitalRead(PIN_PIR2);
+}
+
+void readFlame() {
+#if ENABLE_FLAME_SENSORS
+  sFlameA1 = analogRead(PIN_FLAME_A1);
+  sFlameA2 = analogRead(PIN_FLAME_A2);
+  sFlameA3 = analogRead(PIN_FLAME_A3);
+  sFlameD1 = digitalRead(PIN_FLAME_D1);
+  sFlameD2 = digitalRead(PIN_FLAME_D2);
+#else
+  sFlameA1 = 1023;
+  sFlameA2 = 1023;
+  sFlameA3 = 1023;
+  sFlameD1 = HIGH;
+  sFlameD2 = HIGH;
+#endif
+}
+
+void readGas() {
+  long sum = 0;
+  for (byte i = 0; i < 4; i++) {
+    sum += analogRead(PIN_MQ2);
+    delay(2);
+  }
+  sGas = sum / 4;
+}
+
+void readAllSensors() {
+  readFrontUltrasonic();
+  readRearUltrasonic();
+  readDHT();
+  readPIR();
+  readFlame();
+  readGas();
+}
+
+// ============================================================
+//  ALERT EVALUATION
+// ============================================================
+
+void evaluateAlerts() {
+  bool flameNow = flameDetectedNow();
+  if (flameNow && !alertFlame) {
+    alertFlame = true;
+    DBGLN(F("!!! ALERT: FLAME DETECTED !!!"));
+    DBG(F("A1=")); DBG(sFlameA1);
+    DBG(F(" A2=")); DBG(sFlameA2);
+    DBG(F(" A3=")); DBG(sFlameA3);
+    DBG(F(" D1=")); DBG(sFlameD1);
+    DBG(F(" D2=")); DBGLN(sFlameD2);
+  } else if (!flameNow && alertFlame) {
+    alertFlame = false;
+    DBGLN(F("ALERT: Flame cleared"));
+  }
+
+  bool gasNow = (gasDelta() > GAS_THRESHOLD);
+  if (gasNow && !alertGas) {
+    alertGas = true;
+    DBG(F("!!! ALERT: GAS DETECTED raw="));
+    DBG(sGas);
+    DBG(F(" delta="));
+    DBGLN(gasDelta());
+  } else if (!gasNow && alertGas) {
+    alertGas = false;
+    DBGLN(F("ALERT: Gas cleared"));
+  }
+
+  bool frontNow = (sFrontDist > 0.0f && sFrontDist < DIST_STOP);
+  bool rearNow = (sRearDist > 0.0f && sRearDist < DIST_STOP);
+  if (frontNow && !alertObstacleFront) {
+    alertObstacleFront = true;
+    DBG(F("!!! ALERT: FRONT OBSTACLE at "));
+    DBG(sFrontDist);
+    DBGLN(F("cm"));
+  } else if (!frontNow && alertObstacleFront) {
+    alertObstacleFront = false;
+    DBGLN(F("ALERT: Front obstacle cleared"));
+  }
+
+  if (rearNow && !alertObstacleRear) {
+    alertObstacleRear = true;
+    DBG(F("!!! ALERT: REAR OBSTACLE at "));
+    DBG(sRearDist);
+    DBGLN(F("cm"));
+  } else if (!rearNow && alertObstacleRear) {
+    alertObstacleRear = false;
+    DBGLN(F("ALERT: Rear obstacle cleared"));
+  }
+
+  bool motionNow = (sPIR1 == HIGH || sPIR2 == HIGH);
+  if (motionNow && !alertMotion) {
+    alertMotion = true;
+    DBG(F("!!! ALERT: MOTION PIR1="));
+    DBG(sPIR1);
+    DBG(F(" PIR2="));
+    DBGLN(sPIR2);
+  } else if (!motionNow && alertMotion) {
+    alertMotion = false;
+  }
+
+  bool tempNow = (sTemp > 0.0f && sTemp > TEMP_WARN);
+  if (tempNow && !alertTemp) {
+    alertTemp = true;
+    DBG(F("!!! ALERT: HIGH TEMP "));
+    DBG(sTemp);
+    DBGLN(F("C"));
+  } else if (!tempNow && alertTemp) {
+    alertTemp = false;
+    DBGLN(F("ALERT: Temp normal"));
+  }
+}
+
+// ============================================================
+//  AUTO SAFETY
+// ============================================================
+
+void checkAutoSafety() {
+  if (!autoSafety) {
+    return;
+  }
+
+  bool critical = alertFlame || (gasDelta() > GAS_DANGER) || (sTemp > TEMP_DANGER);
+
+  if (critical) {
+    if (alertFlame) {
+      enterHazard(F("AUTO-SAFETY FIRE"));
+    } else if (gasDelta() > GAS_DANGER) {
+      enterHazard(F("AUTO-SAFETY GAS"));
+    } else {
+      enterHazard(F("AUTO-SAFETY HEAT"));
+    }
+    return;
+  }
+
+  if (hazardActive && !alertFlame && !alertGas && sTemp <= TEMP_WARN) {
+    DBGLN(F("AUTO-SAFETY: Hazard cleared"));
+    clearHazardState();
+  }
+}
+
+// ============================================================
+//  SMART AUTONOMOUS HELPERS
+// ============================================================
+
+char decideBestTurn(float leftDist, float rightDist) {
+  if (leftDist >= DIST_CLEAR && leftDist >= rightDist) {
+    return 'L';
+  }
+  if (rightDist >= DIST_CLEAR && rightDist > leftDist) {
+    return 'R';
+  }
+
+  if (leftDist == rightDist) {
+    if (lastTurnLeft) {
+      return 'R';
+    }
+    return 'L';
+  }
+
+  return (leftDist > rightDist) ? 'L' : 'R';
+}
+
+void startScanSequence() {
+  scanLeftDist = 999.0f;
+  scanRightDist = 999.0f;
+  scanPhase = SCAN_WAIT_LEFT;
+  autoTimer = millis();
+  sendCmd('<');
+}
+
+bool processScanSequence() {
+  switch (scanPhase) {
+    case SCAN_WAIT_LEFT:
+      if (millis() - autoTimer >= AUTO_SCAN_PAUSE) {
+        scanLeftDist = readFrontUltrasonic();
+        sendCmd('>');
+        autoTimer = millis();
+        scanPhase = SCAN_WAIT_RIGHT;
+      }
+      return false;
+
+    case SCAN_WAIT_RIGHT:
+      if (millis() - autoTimer >= AUTO_SCAN_RIGHT_PAUSE) {
+        scanRightDist = readFrontUltrasonic();
+        sendCmd('C');
+        autoTimer = millis();
+        scanPhase = SCAN_WAIT_CENTER;
+      }
+      return false;
+
+    case SCAN_WAIT_CENTER:
+      if (millis() - autoTimer >= AUTO_CENTER_PAUSE) {
+        pendingTurnCmd = decideBestTurn(scanLeftDist, scanRightDist);
+        scanPhase = SCAN_IDLE;
+        DBG(F("AUTO: Scan L="));
+        DBG(scanLeftDist);
+        DBG(F("cm R="));
+        DBG(scanRightDist);
+        DBGLN(F("cm"));
+        return true;
+      }
+      return false;
+
+    default:
+      return false;
+  }
+}
+
+// ============================================================
+//  AUTONOMOUS MODE
+// ============================================================
+
+void runAutonomous() {
+  if (!autonomous || hazardActive) {
+    return;
+  }
+
+  if (alertFlame || alertGas) {
+    enterHazard(alertFlame ? F("AUTO FIRE/GAS") : F("AUTO GAS"));
+    return;
+  }
+
+  switch (autoState) {
+    case AUTO_PATROL:
+      setMode("AUTO-PTRL");
+
+      if (alertMotion) {
+        sendCmdSilent('S');
+        motionPauseUntil = millis() + AUTO_MOTION_PAUSE_MS;
+        autoState = AUTO_SCANNING;
+        setMode("AUTO-MOTION");
+        DBGLN(F("AUTO: Motion detected, pausing"));
+        break;
+      }
+
+      if (sFrontDist > 0.0f && sFrontDist < DIST_STOP) {
+        sendCmdSilent('S');
+        autoState = AUTO_OBSTACLE_FOUND;
+        autoTimer = millis();
+        DBG(F("AUTO: Obstacle at "));
+        DBG(sFrontDist);
+        DBGLN(F("cm"));
+        break;
+      }
+
+      if (sFrontDist > 0.0f && sFrontDist < DIST_WARN) {
+        setMode("AUTO-SLOW");
+        sendCmd('1');
+        sendCmdSilent('F');
+      } else {
+        sendCmd((char)('0' + AUTO_PATROL_SPEED));
+        sendCmdSilent('F');
+      }
+      break;
+
+    case AUTO_OBSTACLE_FOUND:
+      setMode("AUTO-OBST");
+      sendCmdSilent('B');
+      autoTimer = millis();
+      autoState = AUTO_BACKING;
+      DBGLN(F("AUTO: Backing up"));
+      break;
+
+    case AUTO_BACKING:
+      setMode("AUTO-BACK");
+      readRearUltrasonic();
+      if (sRearDist > 0.0f && sRearDist < DIST_STOP) {
+        sendCmdSilent('S');
+        autoState = AUTO_SCANNING;
+        scanPhase = SCAN_IDLE;
+        DBGLN(F("AUTO: Rear blocked, stop backing"));
+      } else if (millis() - autoTimer >= AUTO_BACKUP_MS) {
+        sendCmdSilent('S');
+        autoState = AUTO_SCANNING;
+        scanPhase = SCAN_IDLE;
+        DBGLN(F("AUTO: Scanning path"));
+      }
+      break;
+
+    case AUTO_SCANNING:
+      if (motionPauseUntil != 0 && millis() < motionPauseUntil) {
+        break;
+      }
+      motionPauseUntil = 0;
+      setMode("AUTO-SCAN");
+      if (scanPhase == SCAN_IDLE) {
+        startScanSequence();
+      } else if (processScanSequence()) {
+        sendCmdSilent(pendingTurnCmd);
+        lastTurnLeft = (pendingTurnCmd == 'L');
+        autoTimer = millis();
+        autoState = AUTO_TURNING;
+        DBG(F("AUTO: Turning "));
+        DBGLN(pendingTurnCmd == 'L' ? F("LEFT") : F("RIGHT"));
+      }
+      break;
+
+    case AUTO_TURNING:
+      setMode("AUTO-TURN");
+      if (millis() - autoTimer >= AUTO_TURN_MS) {
+        sendCmdSilent('S');
+        autoState = AUTO_PATROL;
+        DBGLN(F("AUTO: Resume patrol"));
+      }
+      break;
+
+    case AUTO_HAZARD:
+      break;
+
+    default:
+      autoState = AUTO_PATROL;
+      break;
+  }
+}
+
+// ============================================================
+//  TELEMETRY
+// ============================================================
+
+void printTelemetry() {
+  DBG(F("["));
+  DBG(currentMode);
+  DBG(F("] F:"));
+  DBG(sFrontDist);
+  DBG(F("cm R:"));
+  DBG(sRearDist);
+  DBG(F("cm T:"));
+  DBG(sTemp);
+  DBG(F("C H:"));
+  DBG(sHumid);
+  DBG(F("% GAS:"));
+  DBG(sGas);
+  DBG(F(" dG:"));
+  DBG(gasDelta());
+  DBG(F(" FL:"));
+  DBG(sFlameA1);
+  DBG(F("/"));
+  DBG(sFlameA2);
+  DBG(F("/"));
+  DBG(sFlameA3);
+  DBG(F(" PIR:"));
+  DBG(sPIR1);
+  DBG(F("/"));
+  DBG(sPIR2);
+  DBG(F(" ALRT:"));
+  DBG(alertFlame ? F("FLM ") : F("--- "));
+  DBG(alertGas ? F("GAS ") : F("--- "));
+  DBG(alertObstacleFront ? F("F-OBS ") : F("------ "));
+  DBG(alertObstacleRear ? F("R-OBS ") : F("------ "));
+  DBG(alertMotion ? F("MOT ") : F("--- "));
+  DBG(alertTemp ? F("TMP ") : F("--- "));
+  DBG(F(" AUT:"));
+  DBG(autonomous ? F("ON") : F("OFF"));
+  DBG(F(" HAZ:"));
+  DBGLN(hazardActive ? F("YES") : F("NO"));
+}
+
+void printStatus() {
+  DBGLN(F("========== ARDUINO 2 STATUS =========="));
+  DBG(F("Mode          : ")); DBGLN(currentMode);
+  DBG(F("Autonomous    : ")); DBGLN(autonomous ? F("ON") : F("OFF"));
+  DBG(F("Auto-Safety   : ")); DBGLN(autoSafety ? F("ON") : F("OFF"));
+  DBG(F("Hazard        : ")); DBGLN(hazardActive ? F("ACTIVE") : F("CLEAR"));
+  DBG(F("Telemetry     : ")); DBGLN(telemActive ? F("ON") : F("OFF"));
+  DBG(F("Last cmd      : ")); DBGLN(lastCmd);
+  DBGLN(F("--- SENSORS ---"));
+  DBG(F("Front dist    : ")); DBG(sFrontDist); DBGLN(F(" cm"));
+  DBG(F("Rear dist     : ")); DBG(sRearDist); DBGLN(F(" cm"));
+  DBG(F("Temperature   : ")); DBG(sTemp); DBGLN(F(" C"));
+  DBG(F("Humidity      : ")); DBG(sHumid); DBGLN(F(" %"));
+  DBG(F("PIR 1 / 2     : ")); DBG(sPIR1); DBG(F(" / ")); DBGLN(sPIR2);
+  DBG(F("Gas raw/delta : ")); DBG(sGas); DBG(F(" / ")); DBGLN(gasDelta());
+  DBG(F("MQ2 baseline  : ")); DBGLN(mq2Baseline);
+  DBG(F("Flame A1/A2/A3: ")); DBG(sFlameA1); DBG(F(" / ")); DBG(sFlameA2); DBG(F(" / ")); DBGLN(sFlameA3);
+  DBG(F("Flame D1/D2   : ")); DBG(sFlameD1); DBG(F(" / ")); DBGLN(sFlameD2);
+  DBGLN(F("--- ALERTS ---"));
+  DBG(F("Flame         : ")); DBGLN(alertFlame ? F("YES") : F("clear"));
+  DBG(F("Gas           : ")); DBGLN(alertGas ? F("YES") : F("clear"));
+  DBG(F("Front obst    : ")); DBGLN(alertObstacleFront ? F("YES") : F("clear"));
+  DBG(F("Rear obst     : ")); DBGLN(alertObstacleRear ? F("YES") : F("clear"));
+  DBG(F("Motion        : ")); DBGLN(alertMotion ? F("YES") : F("clear"));
+  DBG(F("Temp high     : ")); DBGLN(alertTemp ? F("YES") : F("clear"));
+  DBGLN(F("--- THRESHOLDS ---"));
+  DBG(F("Dist stop/warn: ")); DBG(DIST_STOP); DBG(F(" / ")); DBGLN(DIST_WARN);
+  DBG(F("Gas warn/dngr : ")); DBG(GAS_THRESHOLD); DBG(F(" / ")); DBGLN(GAS_DANGER);
+  DBG(F("Temp warn/dngr: ")); DBG(TEMP_WARN); DBG(F(" / ")); DBGLN(TEMP_DANGER);
+  DBG(F("Flame thresh  : ")); DBGLN(FLAME_THRESHOLD);
+  DBGLN(F("--- I2C ---"));
+  DBG(F("Arduino 1 addr: 0x")); printHexByte(I2C_ADDR); DBGNL();
+  DBGLN(F("======================================"));
+}
+
+// ============================================================
+//  I2C SCAN
+// ============================================================
+
+void scanI2C() {
+  DBGLN(F("--- I2C SCAN ---"));
+  byte found = 0;
+  for (byte addr = 1; addr < 127; addr++) {
+    Wire.beginTransmission(addr);
+    if (Wire.endTransmission() == 0) {
+      DBG(F("  Device at 0x"));
+      printHexByte(addr);
+      DBGNL();
+      found++;
+    }
+  }
+  DBG(F("  Total: "));
+  DBG((int)found);
+  DBGLN(F(" device(s)"));
+  DBGLN(F("----------------"));
+}
+
+// ============================================================
+//  CALIBRATION
+// ============================================================
+
+void calibrateMQ2() {
+  DBGLN(F("MQ2 CAL: Keep sensor in clean air"));
+  long sum = 0;
+  for (byte i = 0; i < 20; i++) {
+    sum += analogRead(PIN_MQ2);
+    delay(100);
+    DBG(F("."));
+  }
+  DBGNL();
+  mq2Baseline = sum / 20;
+  saveMQ2Baseline();
+  DBG(F("MQ2 CAL: Baseline = "));
+  DBGLN(mq2Baseline);
+  DBGLN(F("MQ2 CAL: Saved to EEPROM"));
+}
+
+void resetThresholds() {
+  mq2Baseline = 0;
+  clearMQ2BaselineStorage();
+  hazardActive = false;
+  autoState = AUTO_PATROL;
+  scanPhase = SCAN_IDLE;
+  setMode("IDLE");
+  DBGLN(F("RESET: Baseline/state restored"));
+}
+
+// ============================================================
+//  COMMAND HANDLER
+// ============================================================
+
+void handleMovementOverride() {
+  if (autonomous) {
+    autonomous = false;
+    autoState = AUTO_PATROL;
+    scanPhase = SCAN_IDLE;
+    sendCmd('M');
+    DBG(F(" (auto OFF)"));
+  }
+  DBGNL();
+}
+
+void handleCommand(char cmd) {
+  switch (cmd) {
+    case '?':
+      readAllSensors();
+      evaluateAlerts();
+      printStatus();
+      break;
+
+    case 'V':
+      readAllSensors();
+      evaluateAlerts();
+      printTelemetry();
+      break;
+
+    case 'P':
+      telemActive = !telemActive;
+      DBG(F("TELEM: "));
+      DBGLN(telemActive ? F("ON") : F("OFF"));
+      break;
+
+    case 'I':
+      scanI2C();
+      break;
+
+    case 'T':
+      DBGLN(F("--- SENSOR TEST ---"));
+      readAllSensors();
+      DBG(F("US FRONT: ")); DBG(sFrontDist); DBGLN(F(" cm"));
+      DBG(F("US REAR : ")); DBG(sRearDist); DBGLN(F(" cm"));
+      DBG(F("DHT11   : ")); DBG(sTemp); DBG(F(" C  ")); DBG(sHumid); DBGLN(F(" %"));
+      DBG(F("PIR1    : ")); DBGLN(sPIR1 ? F("MOTION") : F("clear"));
+      DBG(F("PIR2    : ")); DBGLN(sPIR2 ? F("MOTION") : F("clear"));
+      DBG(F("MQ2     : ")); DBG(sGas); DBG(F(" delta=")); DBGLN(gasDelta());
+      DBG(F("Flame A1: ")); DBGLN(sFlameA1);
+      DBG(F("Flame A2: ")); DBGLN(sFlameA2);
+      DBG(F("Flame A3: ")); DBGLN(sFlameA3);
+      DBG(F("Flame D1: ")); DBGLN(sFlameD1);
+      DBG(F("Flame D2: ")); DBGLN(sFlameD2);
+      DBGLN(F("-------------------"));
+      break;
+
+    case 'Z':
+      autoSafety = !autoSafety;
+      DBG(F("AUTO-SAFETY: "));
+      DBGLN(autoSafety ? F("ON") : F("OFF"));
+      break;
+
+    case 'K':
+      calibrateMQ2();
+      break;
+
+    case '~':
+      resetThresholds();
+      break;
+
+    case 'A':
+      autonomous = !autonomous;
+      if (autonomous) {
+        autoState = AUTO_PATROL;
+        scanPhase = SCAN_IDLE;
+        sendCmd('A');
+        setMode("AUTO");
+        DBGLN(F("MODE: Autonomous ON"));
+      } else {
+        sendCmd('M');
+        sendCmd('S');
+        scanPhase = SCAN_IDLE;
+        setMode("IDLE");
+        DBGLN(F("MODE: Manual control"));
+      }
+      break;
+
+    case 'E':
+      hazardActive = !hazardActive;
+      if (hazardActive) {
+        scanPhase = SCAN_IDLE;
+        sendCmd('S');
+        sendCmd('H');
+        setMode("HAZARD");
+        DBGLN(F("HAZARD: Manually triggered"));
+      } else {
+        clearHazardState();
+        DBGLN(F("HAZARD: Manually cleared"));
+      }
+      break;
+
+    case 'F':
+      if (!hazardActive) {
+        lastCmd = 'F';
+        setMode("FWD");
+        sendCmd('F');
+        DBG(F("CMD: FWD"));
+        handleMovementOverride();
+      } else {
+        DBGLN(F("CMD blocked - hazard active"));
+      }
+      break;
+
+    case 'B':
+      if (!hazardActive) {
+        lastCmd = 'B';
+        setMode("BACK");
+        sendCmd('B');
+        DBG(F("CMD: BACK"));
+        handleMovementOverride();
+      } else {
+        DBGLN(F("CMD blocked - hazard active"));
+      }
+      break;
+
+    case 'L':
+      if (!hazardActive) {
+        lastCmd = 'L';
+        setMode("LEFT");
+        sendCmd('L');
+        DBGLN(F("CMD: LEFT"));
+        if (autonomous) {
+          autonomous = false;
+          autoState = AUTO_PATROL;
+          sendCmd('M');
+        }
+      }
+      break;
+
+    case 'R':
+      if (!hazardActive) {
+        lastCmd = 'R';
+        setMode("RGHT");
+        sendCmd('R');
+        DBGLN(F("CMD: RIGHT"));
+        if (autonomous) {
+          autonomous = false;
+          autoState = AUTO_PATROL;
+          sendCmd('M');
+        }
+      }
+      break;
+
+    case 'S':
+      lastCmd = 'S';
+      setMode("IDLE");
+      if (autonomous) {
+        autonomous = false;
+        autoState = AUTO_PATROL;
+        scanPhase = SCAN_IDLE;
+        sendCmd('M');
+      }
+      sendCmd('S');
+      DBGLN(F("CMD: STOP"));
+      break;
+
+    case '1':
+      sendCmd('1');
+      DBGLN(F("SPEED: 1 slow"));
+      break;
+
+    case '2':
+      sendCmd('2');
+      DBGLN(F("SPEED: 2 medium"));
+      break;
+
+    case '3':
+      sendCmd('3');
+      DBGLN(F("SPEED: 3 fast"));
+      break;
+
+    case '<':
+      sendCmd('<');
+      DBGLN(F("SERVO: left"));
+      break;
+
+    case '>':
+      sendCmd('>');
+      DBGLN(F("SERVO: right"));
+      break;
+
+    case 'C':
+      sendCmd('C');
+      DBGLN(F("SERVO: center"));
+      break;
+
+    default:
+      break;
+  }
+}
+
+// ============================================================
+//  INPUT HANDLING
+// ============================================================
+
+void processInput(Stream &port, const __FlashStringHelper *label) {
+  static unsigned long lastCmdTimeUSB = 0;
+  static unsigned long lastCmdTimeBT = 0;
+  unsigned long *lastCmdTime = (&port == &Serial) ? &lastCmdTimeUSB : &lastCmdTimeBT;
+
+  while (port.available() > 0) {
+    char c = (char)port.read();
+
+    if (c == '\r' || c == '\n' || c == ' ') {
+      continue;
+    }
+
+    unsigned long now = millis();
+    if (now - *lastCmdTime < COMMAND_GAP_MS) {
+      continue;
+    }
+    *lastCmdTime = now;
+
+    if (&port == &Serial) {
+      usbConsoleSeen = true;
+      btConsoleFallback = false;
+    }
+
+    DBG(label);
+    DBG(c);
+    DBGNL();
+    handleCommand(c);
+  }
+}
+
+void updateConsoleRouting() {
+  if (ENABLE_BT_DEBUG) {
+    return;
+  }
+
+  if (!usbConsoleSeen && !btConsoleFallback && millis() - bootTime >= USB_FALLBACK_TO_BT_MS) {
+    btConsoleFallback = true;
+  }
+
+  if (btConsoleFallback && !btFallbackAnnounced) {
+    btFallbackAnnounced = true;
+    BT.println(F("BT fallback active"));
+    BT.println(F("No USB activity detected. Bluetooth console enabled."));
+  }
+}
+
+// ============================================================
+//  SETUP
+// ============================================================
+
+void setup() {
+  Serial.begin(9600);
+  BT.begin(9600);
+  bootTime = millis();
+  Wire.begin();
+  dht.begin();
+
+  pinMode(PIN_US_FRONT_TRIG, OUTPUT);
+  pinMode(PIN_US_FRONT_ECHO, INPUT);
+#if ENABLE_REAR_US
+  pinMode(PIN_US_REAR_TRIG, OUTPUT);
+  pinMode(PIN_US_REAR_ECHO, INPUT);
+#endif
+  pinMode(PIN_PIR1, INPUT);
+  pinMode(PIN_PIR2, INPUT);
+#if ENABLE_FLAME_SENSORS
+  pinMode(PIN_FLAME_D1, INPUT_PULLUP);
+  pinMode(PIN_FLAME_D2, INPUT_PULLUP);
+#endif
+
+  DBGLN(F("MQ2 warming up..."));
+  unsigned long start = millis();
+  while (millis() - start < MQ2_WARMUP_MS) {
+    DBG(F("."));
+    delay(500);
+  }
+  DBGNL();
+
+  if (loadMQ2Baseline()) {
+    DBG(F("MQ2 CAL: Loaded baseline from EEPROM = "));
+    DBGLN(mq2Baseline);
+  } else {
+    DBGLN(F("MQ2 CAL: No saved baseline, calibrating now"));
+    calibrateMQ2();
+  }
+
+  DBGLN(F("============================================"));
+  DBGLN(F("  SAR ROBOT v1.1 - ARDUINO 2 MASTER BRAIN"));
+  DBGLN(F("============================================"));
+  DBGLN(F("  I2C Master | USB+BT dual debug @ 9600"));
+  DBGLN(F("--------------------------------------------"));
+  DBGLN(F("  DEBUG: ? V P I T Z K ~"));
+  DBGLN(F("  MOVE : F B L R S | 1 2 3 | < > C"));
+  DBGLN(F("  MODE : A=autonomous  E=hazard"));
+  DBGLN(F("--------------------------------------------"));
+  DBGLN(F("  UNO SAFE MODE ENABLED"));
+  DBGLN(ENABLE_FLAME_SENSORS ? F("  Flame sensors: ON") : F("  Flame sensors: OFF"));
+  DBGLN(ENABLE_REAR_US ? F("  Rear ultrasonic: ON (D9/D10)") : F("  Rear ultrasonic: OFF"));
+  DBGLN(ENABLE_BT_DEBUG ? F("  BT debug     : ON") : F("  BT debug     : AUTO fallback if USB idle"));
+  DBGLN(ENABLE_BOOT_I2C_SCAN ? F("  Boot I2C scan: ON") : F("  Boot I2C scan: OFF"));
+  DBG(F("  Stop dist : ")); DBG(DIST_STOP); DBGLN(F(" cm"));
+  DBG(F("  Gas thresh: ")); DBGLN(GAS_THRESHOLD);
+  DBG(F("  Flame thr : ")); DBGLN(FLAME_THRESHOLD);
+  DBGLN(F("============================================"));
+
+#if ENABLE_BOOT_I2C_SCAN
+  scanI2C();
+#else
+  DBGLN(F("I2C boot scan skipped. Send 'I' to scan manually."));
+#endif
+  readAllSensors();
+  evaluateAlerts();
+  printTelemetry();
+}
+
+// ============================================================
+//  MAIN LOOP
+// ============================================================
+
+void loop() {
+  updateConsoleRouting();
+  processInput(Serial, F("USB> "));
+  processInput(BT, F("BT>  "));
+
+  if (millis() - lastSensorTime >= SENSOR_INTERVAL_MS) {
+    lastSensorTime = millis();
+    readAllSensors();
+    evaluateAlerts();
+    checkAutoSafety();
+  }
+
+  if (autonomous && !hazardActive) {
+    runAutonomous();
+  }
+
+  if (telemActive && millis() - lastTelemTime >= TELEM_INTERVAL_MS) {
+    lastTelemTime = millis();
+    printTelemetry();
+  }
+}
+
+FILE: Android Main Activity
+PATH: C:\Users\Windows\Downloads\SAR_Arduino2_v1\android-app\app\src\main\java\com\sarrobot\controller\MainActivity.java
+------------------------------------------------------------------------
+package com.sarrobot.controller;
+
+import android.Manifest;
+import android.annotation.SuppressLint;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothManager;
+import android.bluetooth.le.BluetoothLeScanner;
+import android.bluetooth.le.ScanCallback;
+import android.bluetooth.le.ScanResult;
+import android.content.Context;
+import android.content.pm.PackageManager;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.MotionEvent;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.ScrollView;
+import android.widget.Spinner;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+
+public class MainActivity extends AppCompatActivity implements BluetoothController.Listener {
+    private static final long BLE_SCAN_MS = 6000L;
+
+    private BluetoothAdapter bluetoothAdapter;
+    private BluetoothLeScanner bleScanner;
+    private BluetoothController bluetoothController;
+
+    private Spinner deviceSpinner;
+    private TextView connectionStateView;
+    private TextView modeView;
+    private TextView frontView;
+    private TextView rearView;
+    private TextView tempView;
+    private TextView humidityView;
+    private TextView gasView;
+    private TextView flameView;
+    private TextView pirView;
+    private TextView alertsView;
+    private TextView rawLogView;
+    private ScrollView logScrollView;
+
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final Map<String, DeviceItem> deviceMap = new LinkedHashMap<>();
+    private final List<DeviceItem> listedDevices = new ArrayList<>();
+    private ArrayAdapter<String> spinnerAdapter;
+    private boolean telemetryStreaming;
+    private boolean bleScanning;
+
+    private final ActivityResultLauncher<String[]> permissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> refreshDeviceList());
+
+    private final Runnable stopBleScanRunnable = this::stopBleScan;
+
+    private final ScanCallback bleScanCallback = new ScanCallback() {
+        @Override
+        public void onScanResult(int callbackType, ScanResult result) {
+            BluetoothDevice device = result.getDevice();
+            if (device == null) {
+                return;
+            }
+
+            String key = "BLE:" + device.getAddress();
+            DeviceItem item = new DeviceItem(device, DeviceItem.Transport.BLE);
+            if (!deviceMap.containsKey(key)) {
+                deviceMap.put(key, item);
+                rebuildDeviceList();
+            }
+        }
+    };
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        BluetoothManager bluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+        bluetoothAdapter = bluetoothManager == null ? null : bluetoothManager.getAdapter();
+        bleScanner = bluetoothAdapter == null ? null : bluetoothAdapter.getBluetoothLeScanner();
+        bluetoothController = new BluetoothController(bluetoothAdapter, this);
+
+        bindViews();
+        setupSpinner();
+        setupButtons();
+        renderDefaultValues();
+
+        if (bluetoothAdapter == null) {
+            toast("This phone does not support Bluetooth");
+            return;
+        }
+
+        refreshDeviceList();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        stopBleScan();
+        bluetoothController.disconnect();
+    }
+
+    private void bindViews() {
+        deviceSpinner = findViewById(R.id.deviceSpinner);
+        connectionStateView = findViewById(R.id.connectionStateView);
+        modeView = findViewById(R.id.modeValue);
+        frontView = findViewById(R.id.frontValue);
+        rearView = findViewById(R.id.rearValue);
+        tempView = findViewById(R.id.tempValue);
+        humidityView = findViewById(R.id.humidityValue);
+        gasView = findViewById(R.id.gasValue);
+        flameView = findViewById(R.id.flameValue);
+        pirView = findViewById(R.id.pirValue);
+        alertsView = findViewById(R.id.alertsValue);
+        rawLogView = findViewById(R.id.rawLogView);
+        logScrollView = findViewById(R.id.logScrollView);
+    }
+
+    private void setupSpinner() {
+        spinnerAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, new ArrayList<>());
+        spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        deviceSpinner.setAdapter(spinnerAdapter);
+    }
+
+    private void setupButtons() {
+        bindHoldMoveButton(R.id.forwardButton, 'F');
+        bindHoldMoveButton(R.id.leftButton, 'L');
+        bindCommandButton(R.id.stopButton, 'S');
+        bindHoldMoveButton(R.id.rightButton, 'R');
+        bindHoldMoveButton(R.id.backwardButton, 'B');
+        bindCommandButton(R.id.speed1Button, '1');
+        bindCommandButton(R.id.speed2Button, '2');
+        bindCommandButton(R.id.speed3Button, '3');
+        bindCommandButton(R.id.autoButton, 'A');
+        bindCommandButton(R.id.hazardButton, 'E');
+        bindCommandButton(R.id.snapshotButton, 'V');
+        bindCommandButton(R.id.statusButton, '?');
+        bindCommandButton(R.id.i2cButton, 'I');
+        bindCommandButton(R.id.calibrateButton, 'K');
+        bindCommandButton(R.id.servoLeftButton, '<');
+        bindCommandButton(R.id.servoCenterButton, 'C');
+        bindCommandButton(R.id.servoRightButton, '>');
+
+        Button connectButton = findViewById(R.id.connectButton);
+        connectButton.setOnClickListener(view -> connectSelectedDevice());
+
+        Button disconnectButton = findViewById(R.id.disconnectButton);
+        disconnectButton.setOnClickListener(view -> bluetoothController.disconnect());
+
+        Button refreshButton = findViewById(R.id.refreshDevicesButton);
+        refreshButton.setOnClickListener(view -> refreshDeviceList());
+
+        Button telemetryButton = findViewById(R.id.toggleTelemetryButton);
+        telemetryButton.setOnClickListener(view -> {
+            telemetryStreaming = !telemetryStreaming;
+            bluetoothController.send('P');
+            toast(telemetryStreaming ? "Telemetry enabled" : "Telemetry disabled");
+        });
+    }
+
+    private void bindCommandButton(int buttonId, char command) {
+        Button button = findViewById(buttonId);
+        button.setOnClickListener(view -> bluetoothController.send(command));
+    }
+
+    private void bindHoldMoveButton(int buttonId, char command) {
+        Button button = findViewById(buttonId);
+        button.setOnTouchListener((view, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    bluetoothController.send(command);
+                    view.setPressed(true);
+                    return true;
+
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    bluetoothController.send('S');
+                    view.setPressed(false);
+                    return true;
+
+                default:
+                    return false;
+            }
+        });
+    }
+
+    private void refreshDeviceList() {
+        if (!ensureBluetoothPermissions()) {
+            return;
+        }
+
+        if (!bluetoothAdapter.isEnabled()) {
+            toast("Turn Bluetooth on first");
+            return;
+        }
+
+        stopBleScan();
+        deviceMap.clear();
+        rebuildDeviceList();
+        loadClassicDevices();
+        startBleScan();
+    }
+
+    private boolean ensureBluetoothPermissions() {
+        List<String> missing = new ArrayList<>();
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                missing.add(Manifest.permission.BLUETOOTH_CONNECT);
+            }
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+                missing.add(Manifest.permission.BLUETOOTH_SCAN);
+            }
+        } else if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            missing.add(Manifest.permission.ACCESS_FINE_LOCATION);
+        }
+
+        if (missing.isEmpty()) {
+            return true;
+        }
+
+        permissionLauncher.launch(missing.toArray(new String[0]));
+        return false;
+    }
+
+    @SuppressLint("MissingPermission")
+    private void loadClassicDevices() {
+        Set<BluetoothDevice> bonded = bluetoothAdapter.getBondedDevices();
+        for (BluetoothDevice device : bonded) {
+            String key = "CLASSIC:" + device.getAddress();
+            deviceMap.put(key, new DeviceItem(device, DeviceItem.Transport.CLASSIC));
+        }
+        rebuildDeviceList();
+    }
+
+    @SuppressLint("MissingPermission")
+    private void startBleScan() {
+        if (bleScanner == null) {
+            return;
+        }
+
+        bleScanning = true;
+        connectionStateView.setText(getString(R.string.scanning_ble));
+        bleScanner.startScan(bleScanCallback);
+        mainHandler.postDelayed(stopBleScanRunnable, BLE_SCAN_MS);
+    }
+
+    @SuppressLint("MissingPermission")
+    private void stopBleScan() {
+        if (!bleScanning || bleScanner == null) {
+            return;
+        }
+        bleScanning = false;
+        mainHandler.removeCallbacks(stopBleScanRunnable);
+        bleScanner.stopScan(bleScanCallback);
+        if (connectionStateView.getText().toString().contains("Scanning")) {
+            connectionStateView.setText(R.string.disconnected_state);
+        }
+    }
+
+    private void rebuildDeviceList() {
+        listedDevices.clear();
+        listedDevices.addAll(deviceMap.values());
+
+        spinnerAdapter.clear();
+        for (DeviceItem item : listedDevices) {
+            spinnerAdapter.add(item.getDisplayName());
+        }
+        spinnerAdapter.notifyDataSetChanged();
+    }
+
+    private void connectSelectedDevice() {
+        int index = deviceSpinner.getSelectedItemPosition();
+        if (index < 0 || index >= listedDevices.size()) {
+            toast("Refresh first, then choose a Bluetooth device");
+            return;
+        }
+
+        stopBleScan();
+        bluetoothController.connect(this, listedDevices.get(index));
+    }
+
+    private void renderDefaultValues() {
+        connectionStateView.setText(R.string.disconnected_state);
+        modeView.setText("--");
+        frontView.setText("--");
+        rearView.setText("--");
+        tempView.setText("--");
+        humidityView.setText("--");
+        gasView.setText("--");
+        flameView.setText("--");
+        pirView.setText("--");
+        alertsView.setText("--");
+    }
+
+    private void appendLog(String line) {
+        rawLogView.append(line + "\n");
+        logScrollView.post(() -> logScrollView.fullScroll(ScrollView.FOCUS_DOWN));
+    }
+
+    private void updateTelemetry(RobotTelemetry telemetry) {
+        modeView.setText(telemetry.mode);
+        frontView.setText(formatDistance(telemetry.frontDistance));
+        rearView.setText(formatDistance(telemetry.rearDistance));
+        tempView.setText(formatFloat(telemetry.temperature, "C"));
+        humidityView.setText(formatFloat(telemetry.humidity, "%"));
+        gasView.setText(String.format(Locale.US, "raw %d / delta %d", telemetry.gasRaw, telemetry.gasDelta));
+        flameView.setText(String.format(Locale.US, "A1 %d | A2 %d | A3 %d", telemetry.flameA1, telemetry.flameA2, telemetry.flameA3));
+        pirView.setText(String.format(Locale.US, "PIR1 %d | PIR2 %d", telemetry.pir1, telemetry.pir2));
+        alertsView.setText(String.format(Locale.US, "%s | AUT %s | HAZ %s",
+                telemetry.alerts,
+                telemetry.autonomous ? "ON" : "OFF",
+                telemetry.hazard ? "YES" : "NO"));
+    }
+
+    private String formatDistance(float value) {
+        if (value < 0f) {
+            return "--";
+        }
+        return String.format(Locale.US, "%.1f cm", value);
+    }
+
+    private String formatFloat(float value, String suffix) {
+        if (value < 0f) {
+            return "--";
+        }
+        return String.format(Locale.US, "%.1f %s", value, suffix);
+    }
+
+    private void toast(String message) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    public void onStateChanged(String state) {
+        connectionStateView.setText(state);
+        appendLog("STATE: " + state);
+    }
+
+    @Override
+    public void onLineReceived(String line) {
+        appendLog(line);
+        RobotTelemetry telemetry = TelemetryParser.parse(line);
+        if (telemetry != null) {
+            updateTelemetry(telemetry);
+        }
+    }
+
+    @Override
+    public void onError(String message) {
+        appendLog("ERROR: " + message);
+        toast(message);
+    }
+}
+
+FILE: Android Bluetooth Controller
+PATH: C:\Users\Windows\Downloads\SAR_Arduino2_v1\android-app\app\src\main\java\com\sarrobot\controller\BluetoothController.java
+------------------------------------------------------------------------
+package com.sarrobot.controller;
+
+import android.annotation.SuppressLint;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothGatt;
+import android.bluetooth.BluetoothGattCallback;
+import android.bluetooth.BluetoothGattCharacteristic;
+import android.bluetooth.BluetoothGattDescriptor;
+import android.bluetooth.BluetoothGattService;
+import android.bluetooth.BluetoothProfile;
+import android.bluetooth.BluetoothSocket;
+import android.content.Context;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.UUID;
+
+public class BluetoothController {
+    public interface Listener {
+        void onStateChanged(String state);
+        void onLineReceived(String line);
+        void onError(String message);
+    }
+
+    private static final UUID SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+    private static final UUID CCCD_UUID = UUID.fromString("00002902-0000-1000-8000-00805F9B34FB");
+    private static final UUID NUS_SERVICE_UUID = UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E");
+    private static final UUID NUS_RX_UUID = UUID.fromString("6E400002-B5A3-F393-E0A9-E50E24DCCA9E");
+    private static final UUID NUS_TX_UUID = UUID.fromString("6E400003-B5A3-F393-E0A9-E50E24DCCA9E");
+
+    private final BluetoothAdapter bluetoothAdapter;
+    private final Listener listener;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+
+    private BluetoothSocket classicSocket;
+    private OutputStream classicOutputStream;
+    private Thread classicReadThread;
+
+    private BluetoothGatt bleGatt;
+    private BluetoothGattCharacteristic bleWriteCharacteristic;
+    private BluetoothGattCharacteristic bleNotifyCharacteristic;
+
+    private final StringBuilder bleLineBuffer = new StringBuilder();
+    private volatile boolean running;
+    private DeviceItem.Transport activeTransport;
+
+    public BluetoothController(BluetoothAdapter bluetoothAdapter, Listener listener) {
+        this.bluetoothAdapter = bluetoothAdapter;
+        this.listener = listener;
+    }
+
+    public void connect(Context context, DeviceItem item) {
+        disconnect();
+        if (item.transport == DeviceItem.Transport.CLASSIC) {
+            connectClassic(item.device);
+        } else {
+            connectBle(context, item.device);
+        }
+    }
+
+    public void send(char command) {
+        if (activeTransport == DeviceItem.Transport.CLASSIC) {
+            sendClassic(command);
+            return;
+        }
+        if (activeTransport == DeviceItem.Transport.BLE) {
+            sendBle(command);
+            return;
+        }
+        postError("Not connected");
+    }
+
+    public void disconnect() {
+        running = false;
+        activeTransport = null;
+        bleLineBuffer.setLength(0);
+
+        if (classicReadThread != null) {
+            classicReadThread.interrupt();
+            classicReadThread = null;
+        }
+
+        if (classicOutputStream != null) {
+            try {
+                classicOutputStream.close();
+            } catch (IOException ignored) {
+            }
+            classicOutputStream = null;
+        }
+
+        if (classicSocket != null) {
+            try {
+                classicSocket.close();
+            } catch (IOException ignored) {
+            }
+            classicSocket = null;
+        }
+
+        bleWriteCharacteristic = null;
+        bleNotifyCharacteristic = null;
+
+        if (bleGatt != null) {
+            try {
+                bleGatt.disconnect();
+                bleGatt.close();
+            } catch (Exception ignored) {
+            }
+            bleGatt = null;
+        }
+
+        postState("Disconnected");
+    }
+
+    private void connectClassic(BluetoothDevice device) {
+        Thread connectThread = new Thread(() -> {
+            try {
+                postState("Connecting (classic) to " + safeName(device));
+                BluetoothSocket candidate = device.createRfcommSocketToServiceRecord(SPP_UUID);
+                bluetoothAdapter.cancelDiscovery();
+                candidate.connect();
+
+                classicSocket = candidate;
+                classicOutputStream = candidate.getOutputStream();
+                activeTransport = DeviceItem.Transport.CLASSIC;
+                running = true;
+                startClassicReader(candidate.getInputStream());
+                postState("Connected (classic) to " + safeName(device));
+            } catch (IOException ex) {
+                postError("Classic connection failed: " + safeMessage(ex));
+                disconnect();
+            }
+        }, "bt-classic-connect");
+
+        connectThread.start();
+    }
+
+    @SuppressLint("MissingPermission")
+    private void connectBle(Context context, BluetoothDevice device) {
+        postState("Connecting (BLE) to " + safeName(device));
+        activeTransport = DeviceItem.Transport.BLE;
+        running = true;
+        bleGatt = device.connectGatt(context, false, bleCallback, BluetoothDevice.TRANSPORT_LE);
+    }
+
+    private void sendClassic(char command) {
+        OutputStream stream = classicOutputStream;
+        if (stream == null) {
+            postError("Not connected");
+            return;
+        }
+
+        Thread writeThread = new Thread(() -> {
+            try {
+                stream.write(command);
+                stream.flush();
+            } catch (IOException ex) {
+                postError("Send failed: " + safeMessage(ex));
+                disconnect();
+            }
+        }, "bt-classic-write");
+
+        writeThread.start();
+    }
+
+    @SuppressLint("MissingPermission")
+    private void sendBle(char command) {
+        if (bleGatt == null || bleWriteCharacteristic == null) {
+            postError("BLE write characteristic not ready");
+            return;
+        }
+
+        byte[] payload = new byte[]{(byte) command};
+        bleWriteCharacteristic.setValue(payload);
+
+        boolean started;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            started = bleGatt.writeCharacteristic(
+                    bleWriteCharacteristic,
+                    payload,
+                    bleWriteCharacteristic.getWriteType()
+            ) == BluetoothStatusCodes.SUCCESS;
+        } else {
+            started = bleGatt.writeCharacteristic(bleWriteCharacteristic);
+        }
+
+        if (!started) {
+            postError("BLE send failed");
+        }
+    }
+
+    private void startClassicReader(InputStream inputStream) {
+        classicReadThread = new Thread(() -> {
+            StringBuilder buffer = new StringBuilder();
+            byte[] chunk = new byte[128];
+
+            while (running && activeTransport == DeviceItem.Transport.CLASSIC) {
+                try {
+                    int read = inputStream.read(chunk);
+                    if (read == -1) {
+                        throw new IOException("Stream closed");
+                    }
+                    consumeIncoming(buffer, new String(chunk, 0, read, StandardCharsets.UTF_8));
+                } catch (IOException ex) {
+                    if (running) {
+                        postError("Classic connection lost: " + safeMessage(ex));
+                    }
+                    disconnect();
+                    break;
+                }
+            }
+        }, "bt-classic-read");
+
+        classicReadThread.start();
+    }
+
+    private void consumeIncoming(StringBuilder buffer, String incoming) {
+        for (int i = 0; i < incoming.length(); i++) {
+            char c = incoming.charAt(i);
+            if (c == '\r') {
+                continue;
+            }
+            if (c == '\n') {
+                String line = buffer.toString().trim();
+                buffer.setLength(0);
+                if (!line.isEmpty()) {
+                    postLine(line);
+                }
+            } else {
+                buffer.append(c);
+            }
+        }
+    }
+
+    private void consumeBleBytes(byte[] value) {
+        String incoming = new String(value, StandardCharsets.UTF_8);
+        consumeIncoming(bleLineBuffer, incoming);
+    }
+
+    @SuppressLint("MissingPermission")
+    private boolean configureBleCharacteristics(BluetoothGatt gatt) {
+        List<BluetoothGattService> services = gatt.getServices();
+        BluetoothGattCharacteristic preferredWrite = null;
+        BluetoothGattCharacteristic preferredNotify = null;
+        BluetoothGattCharacteristic fallbackWrite = null;
+        BluetoothGattCharacteristic fallbackNotify = null;
+
+        for (BluetoothGattService service : services) {
+            for (BluetoothGattCharacteristic characteristic : service.getCharacteristics()) {
+                int properties = characteristic.getProperties();
+                boolean canWrite = (properties & BluetoothGattCharacteristic.PROPERTY_WRITE) != 0
+                        || (properties & BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE) != 0;
+                boolean canNotify = (properties & BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0
+                        || (properties & BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0;
+
+                if (NUS_SERVICE_UUID.equals(service.getUuid())) {
+                    if (NUS_RX_UUID.equals(characteristic.getUuid()) && canWrite) {
+                        preferredWrite = characteristic;
+                    }
+                    if (NUS_TX_UUID.equals(characteristic.getUuid()) && canNotify) {
+                        preferredNotify = characteristic;
+                    }
+                }
+
+                if (fallbackWrite == null && canWrite) {
+                    fallbackWrite = characteristic;
+                }
+                if (fallbackNotify == null && canNotify) {
+                    fallbackNotify = characteristic;
+                }
+            }
+        }
+
+        bleWriteCharacteristic = preferredWrite != null ? preferredWrite : fallbackWrite;
+        bleNotifyCharacteristic = preferredNotify != null ? preferredNotify : fallbackNotify;
+
+        if (bleWriteCharacteristic == null || bleNotifyCharacteristic == null) {
+            return false;
+        }
+
+        if ((bleWriteCharacteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE) != 0) {
+            bleWriteCharacteristic.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
+        } else {
+            bleWriteCharacteristic.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
+        }
+
+        gatt.setCharacteristicNotification(bleNotifyCharacteristic, true);
+        BluetoothGattDescriptor descriptor = bleNotifyCharacteristic.getDescriptor(CCCD_UUID);
+        if (descriptor != null) {
+            descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+            } else {
+                gatt.writeDescriptor(descriptor);
+            }
+        }
+
+        return true;
+    }
+
+    private final BluetoothGattCallback bleCallback = new BluetoothGattCallback() {
+        @Override
+        public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                postError("BLE connection failed: status " + status);
+                disconnect();
+                return;
+            }
+
+            if (newState == BluetoothProfile.STATE_CONNECTED) {
+                postState("Connected (BLE), discovering services");
+                gatt.discoverServices();
+            } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                disconnect();
+            }
+        }
+
+        @Override
+        public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                postError("BLE service discovery failed: " + status);
+                disconnect();
+                return;
+            }
+
+            if (!configureBleCharacteristics(gatt)) {
+                postError("No usable BLE read/write characteristics found");
+                disconnect();
+                return;
+            }
+
+            postState("Connected (BLE)");
+        }
+
+        @Override
+        public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, byte[] value) {
+            consumeBleBytes(value);
+        }
+
+        @Override
+        public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
+            byte[] value = characteristic.getValue();
+            if (value != null) {
+                consumeBleBytes(value);
+            }
+        }
+    };
+
+    private String safeName(BluetoothDevice device) {
+        String name = device.getName();
+        return name == null || name.trim().isEmpty() ? device.getAddress() : name;
+    }
+
+    private String safeMessage(Exception ex) {
+        return ex.getMessage() == null ? "unknown error" : ex.getMessage();
+    }
+
+    private void postState(String state) {
+        mainHandler.post(() -> listener.onStateChanged(state));
+    }
+
+    private void postLine(String line) {
+        mainHandler.post(() -> listener.onLineReceived(line));
+    }
+
+    private void postError(String message) {
+        mainHandler.post(() -> listener.onError(message));
+    }
+
+    private static final class BluetoothStatusCodes {
+        private static final int SUCCESS = 0;
+    }
+}
+
+FILE: Android Telemetry Parser
+PATH: C:\Users\Windows\Downloads\SAR_Arduino2_v1\android-app\app\src\main\java\com\sarrobot\controller\TelemetryParser.java
+------------------------------------------------------------------------
+package com.sarrobot.controller;
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public final class TelemetryParser {
+    private static final Pattern LINE_PATTERN = Pattern.compile(
+            "^\\[(.+?)\\]\\s*F:([\\d.]+)cm\\s*R:([\\d.]+)cm\\s*T:([\\d.]+)C\\s*H:([\\d.]+)%\\s*GAS:(\\d+)\\s*dG:(\\d+)\\s*FL:(\\d+)/(\\d+)/(\\d+)\\s*PIR:(\\d+)/(\\d+)\\s*ALRT:(.+?)\\s*AUT:(ON|OFF)\\s*HAZ:(YES|NO)$"
+    );
+
+    private TelemetryParser() {
+    }
+
+    public static RobotTelemetry parse(String line) {
+        Matcher matcher = LINE_PATTERN.matcher(line.trim());
+        if (!matcher.matches()) {
+            return null;
+        }
+
+        RobotTelemetry telemetry = new RobotTelemetry();
+        telemetry.mode = matcher.group(1).trim();
+        telemetry.frontDistance = parseFloat(matcher.group(2));
+        telemetry.rearDistance = parseFloat(matcher.group(3));
+        telemetry.temperature = parseFloat(matcher.group(4));
+        telemetry.humidity = parseFloat(matcher.group(5));
+        telemetry.gasRaw = parseInt(matcher.group(6));
+        telemetry.gasDelta = parseInt(matcher.group(7));
+        telemetry.flameA1 = parseInt(matcher.group(8));
+        telemetry.flameA2 = parseInt(matcher.group(9));
+        telemetry.flameA3 = parseInt(matcher.group(10));
+        telemetry.pir1 = parseInt(matcher.group(11));
+        telemetry.pir2 = parseInt(matcher.group(12));
+        telemetry.alerts = matcher.group(13).trim();
+        telemetry.autonomous = "ON".equals(matcher.group(14));
+        telemetry.hazard = "YES".equals(matcher.group(15));
+        return telemetry;
+    }
+
+    private static float parseFloat(String value) {
+        try {
+            return Float.parseFloat(value);
+        } catch (NumberFormatException ex) {
+            return -1f;
+        }
+    }
+
+    private static int parseInt(String value) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException ex) {
+            return -1;
+        }
+    }
+}
+
+FILE: Android Device Item
+PATH: C:\Users\Windows\Downloads\SAR_Arduino2_v1\android-app\app\src\main\java\com\sarrobot\controller\DeviceItem.java
+------------------------------------------------------------------------
+package com.sarrobot.controller;
+
+import android.bluetooth.BluetoothDevice;
+
+public class DeviceItem {
+    public enum Transport {
+        CLASSIC,
+        BLE
+    }
+
+    public final BluetoothDevice device;
+    public final Transport transport;
+
+    public DeviceItem(BluetoothDevice device, Transport transport) {
+        this.device = device;
+        this.transport = transport;
+    }
+
+    public String getDisplayName() {
+        String name = device.getName();
+        if (name == null || name.trim().isEmpty()) {
+            name = "Unnamed";
+        }
+        return name + " [" + transport.name() + "] (" + device.getAddress() + ")";
+    }
+}
+
+FILE: Android Robot Telemetry Model
+PATH: C:\Users\Windows\Downloads\SAR_Arduino2_v1\android-app\app\src\main\java\com\sarrobot\controller\RobotTelemetry.java
+------------------------------------------------------------------------
+package com.sarrobot.controller;
+
+public class RobotTelemetry {
+    public String mode = "--";
+    public String alerts = "--";
+    public float frontDistance = -1f;
+    public float rearDistance = -1f;
+    public float temperature = -1f;
+    public float humidity = -1f;
+    public int gasRaw = -1;
+    public int gasDelta = -1;
+    public int flameA1 = -1;
+    public int flameA2 = -1;
+    public int flameA3 = -1;
+    public int pir1 = -1;
+    public int pir2 = -1;
+    public boolean autonomous;
+    public boolean hazard;
+}
+
+FILE: Android Manifest
+PATH: C:\Users\Windows\Downloads\SAR_Arduino2_v1\android-app\app\src\main\AndroidManifest.xml
+------------------------------------------------------------------------
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-feature
+        android:name="android.hardware.bluetooth"
+        android:required="true" />
+
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@android:drawable/sym_def_app_icon"
+        android:label="@string/app_name"
+        android:roundIcon="@android:drawable/sym_def_app_icon"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.SarRobotController">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>
+
+FILE: Android App README
+PATH: C:\Users\Windows\Downloads\SAR_Arduino2_v1\android-app\README.md
+------------------------------------------------------------------------
+# SAR Robot Android App
+
+This folder contains a native Android app project for your HC-05 robot controller.
+
+## What it does
+
+- Connects to a paired `HC-05` using classic Bluetooth SPP
+- Shows live sensor telemetry from the master Arduino
+- Sends movement, speed, servo, autonomous, hazard, and debug commands
+- Displays the raw robot console log
+
+## How to use it
+
+1. Pair the phone with the `HC-05` in Android Bluetooth settings first.
+2. Open the `android-app` folder in Android Studio.
+3. Let Android Studio sync Gradle.
+4. Build and install on your Android phone.
+
+## Telemetry format
+
+The parser expects lines like:
+
+```text
+[AUTO-PTRL] F:24cm R:78cm T:31C H:60% GAS:320 dG:18 FL:1023/1023/1023 PIR:0/0 ALRT:--- --- ------ ------ --- --- AUT:ON HAZ:NO
+```
+
+If you later change the Arduino telemetry format, update:
+
+- `app/src/main/java/com/sarrobot/controller/TelemetryParser.java`
+
+## Note
+
+No APK was built locally here because Android Studio/Gradle is not installed in this workspace.

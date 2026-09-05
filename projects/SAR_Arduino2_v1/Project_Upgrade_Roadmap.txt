@@ -1,0 +1,181 @@
+SAR DISASTER RESPONSE ROBOT
+PROJECT UPGRADE ROADMAP
+Generated: 2026-03-31
+
+============================================================
+OVERVIEW
+============================================================
+This document summarizes the recommended upgrades and priorities
+for the SAR Disaster Response Robot project.
+
+The goal is to improve the robot in the correct order so that:
+1. hardware becomes reliable first
+2. firmware becomes stable second
+3. smart behavior is added third
+4. app upgrades come after the robot itself is dependable
+
+============================================================
+PRIORITY 1 - MAKE THE ROBOT RELIABLE
+============================================================
+1. Replace the damaged motor driver before anything else.
+2. Finalize one stable motor driver choice and motor wiring.
+3. Fix the front ultrasonic issue so both distance sensors are trustworthy.
+4. Decide the final flame setup:
+   - use only the 3 analog flame sensors
+   - or fully wire analog + digital flame sensors
+5. Add a proper bench-test mode so the master can be tested without the motor Arduino.
+6. Make sure power is separated properly:
+   - motor power
+   - servo power
+   - logic power
+
+Why this is first:
+If the hardware is unstable, smarter code and app features will not matter.
+
+============================================================
+PRIORITY 2 - CLEAN UP MASTER FIRMWARE
+============================================================
+1. Re-enable flame sensing only when the hardware is actually ready.
+2. Add sensor health flags:
+   - front ultrasonic offline
+   - rear ultrasonic offline
+   - MQ2 stale
+   - DHT stale
+3. Add better hazard logic with cause reporting:
+   - fire
+   - gas
+   - temperature
+   - manual emergency
+4. Add hysteresis so warnings do not flicker from one noisy reading.
+5. Add stuck detection for repeated obstacle encounters.
+6. Add degraded mode so the robot can continue carefully if one sensor fails.
+
+Why this is second:
+This is where the robot becomes dependable and easier to troubleshoot.
+
+============================================================
+PRIORITY 3 - IMPROVE MASTER INTELLIGENCE
+============================================================
+1. Add real sensor fusion:
+   - flame + temp
+   - gas + flame
+   - motion + obstacle
+   - gas rise trend
+2. Expand behavior states:
+   - IDLE
+   - MANUAL
+   - PATROL
+   - INVESTIGATE
+   - AVOID
+   - RETREAT
+   - HAZARD
+   - STUCK
+   - DEGRADED
+3. Add directional flame logic from the 3 analog flame sensors.
+4. Add escape logic for repeated blockages.
+5. Add confidence scoring instead of only yes/no thresholds.
+
+Why this is third:
+This is what makes the robot feel smart instead of only reactive.
+
+============================================================
+PRIORITY 4 - STABILIZE ARDUINO 1 / MOTOR SIDE
+============================================================
+1. Make the motor slave code match the master command set exactly.
+2. Add ACK or heartbeat over I2C so the master knows if Arduino 1 is alive.
+3. Add safe stop behavior if I2C communication is lost.
+4. If using servos on the motor board, finalize their pins and startup positions.
+5. Make H and G do meaningful hazard behavior on the motor board.
+
+Why this is fourth:
+The robot should always fail safely if the motor controller stops responding.
+
+============================================================
+PRIORITY 5 - UPGRADE THE PHONE APP
+============================================================
+1. Improve connection handling and reconnection.
+2. Add strong warning banners for hazard, gas, fire, and temperature.
+3. Add sensor health display:
+   - front ultrasonic offline
+   - rear sensor okay
+   - gas sensor active
+4. Add a radar-style live visual for the ultrasonic sensors.
+5. Add telemetry history or mini graphs for gas, temperature, and distances.
+6. Add settings or configuration page later.
+7. Add command feedback and clearer robot state display.
+
+Why this is fifth:
+The app already works, so it is useful now, but it can become a much better control station later.
+
+============================================================
+PRIORITY 6 - MISSION-READY SAFETY FEATURES
+============================================================
+1. Add a buzzer or alarm output.
+2. Add a physical emergency stop if possible.
+3. Add battery monitoring.
+4. Add watchdog behavior:
+   - if commands stop
+   - if communication hangs
+   - if logic fails
+   then force safe stop
+5. Add event logging:
+   - hazard triggered
+   - gas spike
+   - repeated obstacle
+   - stuck event
+
+Why this is sixth:
+These help when the robot is used outside simple bench testing.
+
+============================================================
+RECOMMENDED IMMEDIATE ORDER
+============================================================
+1. Replace or finalize the motor driver.
+2. Fix the front ultrasonic.
+3. Decide the final flame sensor setup.
+4. Add bench-test mode.
+5. Stabilize the master safety logic.
+6. Finalize Arduino 1 motor/slave code.
+7. Add the smarter state machine.
+8. Upgrade the app UI and radar view.
+9. Add extra safety hardware/features.
+
+============================================================
+BEST SINGLE DECISION RIGHT NOW
+============================================================
+The next biggest decision should be to finalize the hardware architecture first.
+
+That means deciding:
+- motor driver
+- servo placement
+- flame sensor setup
+- power layout
+
+Once those are fixed, code upgrades become much easier and cleaner.
+
+============================================================
+SIMPLE CHECKLIST
+============================================================
+DO NOW:
+- finalize motor driver
+- fix front ultrasonic
+- confirm flame sensor plan
+- confirm power plan
+
+DO NEXT:
+- improve master safety logic
+- add sensor health checks
+- add bench-test mode
+- finalize Arduino 1 code
+
+DO LATER:
+- add sensor fusion
+- add more autonomous states
+- add app radar and graphs
+- add event logging
+
+OPTIONAL:
+- buzzer
+- emergency stop switch
+- battery monitoring
+- mission modes

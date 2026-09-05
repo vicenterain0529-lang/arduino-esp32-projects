@@ -1,0 +1,29 @@
+UPLOAD THIS FOLDER TO THE NEW PC:
+
+  00_UPLOAD_TO_NEW_PC_CLEAN\pc-vision
+
+What is included:
+- Latest pc-vision files
+- Setup guide
+- YOLO model file
+- Installer script folder
+
+What was intentionally left out:
+- .venv
+- __pycache__
+- vision_config.json
+- vision_ui_state.json
+
+First run on the new PC:
+1. Install Python 3.11 or newer.
+2. Open PowerShell in the copied pc-vision folder.
+3. Run:
+
+   .\run_vision_ui.ps1
+
+4. Set the correct Camera source for that PC.
+5. Click Save Settings, then Start Vision.
+
+If PowerShell blocks scripts:
+
+   powershell -ExecutionPolicy Bypass -File .\run_vision_ui.ps1
